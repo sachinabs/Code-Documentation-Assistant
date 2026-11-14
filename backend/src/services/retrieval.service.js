@@ -7,7 +7,7 @@ const TOP_K = 5;
 
 function isBroadQuestion(question) {
   const q = (question || '').toLowerCase();
-  return /architect|api|endpoint|route|entry point|how does .* work|structure|flow/.test(q);
+  return /architect|api|endpoint|route|entry point|how does .* work|structure|flow|improve|missing|feature|recommend|analysis/.test(q);
 }
 
 function scoreFile(filePath) {
@@ -44,14 +44,10 @@ export async function retrieveContext(repositoryId, question, repo) {
   if (repo?.localPath) {
     try {
       const files = await scanRepository(repo.localPath);
-      const ranked = files
-        .map((f) => ({ f, score: scoreFile(f.path) }))
-        .filter((x) => x.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 8);
-      for (const { f } of ranked) {
-        // Create a chunk from the file content (truncated).
-        const content = f.content.length > 1200 ? f.content.slice(0, 1200) + '\n...' : f.content;
+      // For broad analysis questions, include all repository files (truncated) to avoid missing features.
+      const selected = files.slice(0, 40);
+      for (const f of selected) {
+        const content = f.content.length > 1500 ? f.content.slice(0, 1500) + '\n...' : f.content;
         extra.push({
           filePath: f.path,
           language: f.language,

@@ -73,6 +73,57 @@ function languageName(lang) {
   return map[lang] || lang;
 }
 
+export async function detectFrameworkCapabilities(localPath, techStack) {
+  const caps = { framework: null, capabilities: [] };
+  const frameworks = techStack?.frameworks || [];
+  // FastAPI
+  if (frameworks.includes('FastAPI')) {
+    caps.framework = 'FastAPI';
+    let docsUrl = '/docs';
+    let redocUrl = '/redoc';
+    let openapiUrl = '/openapi.json';
+    let foundConfig = false;
+    try {
+      const files = await walkDirectory(localPath);
+      for (const f of files) {
+        if (!f.relative.endsWith('.py')) continue;
+        const content = await readFileSafe(f.fullPath, MAX_FILE_SIZE);
+        if (!content) continue;
+        const fastapiMatch = content.match(/FastAPI\s*\(([^)]*)\)/s);
+        if (fastapiMatch) {
+          foundConfig = true;
+          const args = fastapiMatch[1];
+          const docs = args.match(/docs_url\s*=\s*["']([^"']*)["']/);
+          const redoc = args.match(/redoc_url\s*=\s*["']([^"']*)["']/);
+          const openapi = args.match(/openapi_url\s*=\s*["']([^"']*)["']/);
+          if (docs) docsUrl = docs[1] || docsUrl;
+          if (redoc) redocUrl = redoc[1] || redocUrl;
+          if (openapi) openapiUrl = openapi[1] || openapiUrl;
+        }
+      }
+    } catch {}
+    caps.capabilities.push({ name: 'Swagger UI', enabled: docsUrl !== null && docsUrl !== 'None' && docsUrl !== '', path: docsUrl });
+    caps.capabilities.push({ name: 'ReDoc', enabled: redocUrl !== null && redocUrl !== 'None' && redocUrl !== '', path: redocUrl });
+    caps.capabilities.push({ name: 'OpenAPI JSON', enabled: openapiUrl !== null && openapiUrl !== 'None' && openapiUrl !== '', path: openapiUrl });
+    if (!foundConfig) {
+      caps.capabilities = [
+        { name: 'Swagger UI', enabled: true, path: '/docs' },
+        { name: 'ReDoc', enabled: true, path: '/redoc' },
+        { name: 'OpenAPI JSON', enabled: true, path: '/openapi.json' },
+      ];
+    }
+  } else if (frameworks.includes('Flask')) {
+    caps.framework = 'Flask';
+  } else if (frameworks.includes('Django')) {
+    caps.framework = 'Django';
+  } else if (frameworks.includes('Express.js')) {
+    caps.framework = 'Express.js';
+  } else if (frameworks.includes('NestJS')) {
+    caps.framework = 'NestJS';
+  }
+  return caps;
+}
+
 export async function detectTechStack(localPath) {
   const stack = {
     languages: [],
@@ -164,6 +215,7 @@ export async function detectTechStack(localPath) {
   stack.databases = [...new Set(stack.databases)];
   stack.libraries = [...new Set(stack.libraries)].slice(0, 20);
 
-  // Languages from computeLanguageStats? caller can merge.
+  stack.capabilities = await detectFrameworkCapabilities(localPath, stack);
+
   return stack;
 }

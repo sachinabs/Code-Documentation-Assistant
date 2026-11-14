@@ -31,7 +31,11 @@ export async function chat(req, res, next) {
     });
 
     const repo = await prisma.repository.findUnique({ where: { id: repositoryId } });
+    console.log('Chat request - repositoryId:', repositoryId, 'conversationId:', conversationId);
+    if (!repo) return res.status(404).json({ message: 'Repository not found' });
+    if (repo.status !== 'completed') return res.status(400).json({ message: 'Repository indexing is not completed' });
     const chunks = await retrievalService.retrieveContext(repositoryId, question, repo);
+    console.log('Retrieved chunks:', chunks.length, chunks.map((c) => c.filePath));
 
     // Relevant milestones as context
     const allMilestones = await prisma.milestone.findMany({ where: { repositoryId } });
@@ -51,6 +55,7 @@ export async function chat(req, res, next) {
         content: m.summary,
       });
     }
+    if (relevant.length) console.log('Milestones injected:', relevant.map((m) => m.title));
 
     // Conversation summary as context
     if (conversation.summary) {
